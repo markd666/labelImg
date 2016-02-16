@@ -162,12 +162,12 @@ class MainWindow(QMainWindow, WindowMixin):
                 'Ctrl+Shift+L', 'color', u'Choose Box fill color')
 
         createMode = action('Create\nRectBox', self.setCreateMode,
-                'Ctrl+N', 'new', u'Start drawing Boxs', enabled=False)
+                'F1', 'new', u'Start drawing Boxs', enabled=False)
         editMode = action('&Edit\nRectBox', self.setEditMode,
                 'Ctrl+J', 'edit', u'Move and edit Boxs', enabled=False)
 
         create = action('Create\nRectBox', self.createShape,
-                'Ctrl+N', 'new', u'Draw a new Box', enabled=False)
+                'F1', 'new', u'Draw a new Box', enabled=False)
         delete = action('Delete\nRectBox', self.deleteSelectedShape,
                 'Delete', 'delete', u'Delete', enabled=False)
         copy = action('&Duplicate\nRectBox', self.copySelectedShape,
