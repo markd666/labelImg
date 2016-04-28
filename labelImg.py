@@ -21,6 +21,7 @@ from zoomWidget import ZoomWidget
 from labelDialog import LabelDialog
 from colorDialog import ColorDialog
 from labelFile import LabelFile, LabelFileError
+from textFiles import TextFiles
 from toolBar import ToolBar
 from pascal_voc_io import PascalVocReader
 
@@ -60,6 +61,8 @@ class MainWindow(QMainWindow, WindowMixin):
         # For loading all image under a directory
         self.mImgList = []
         self.dirname = None
+        self.trainingSetDirectoryName = None
+        self.classesTextFileDirectoryName = None
         self.labelHist = []
         self.lastOpenDir = None
 
@@ -133,6 +136,9 @@ class MainWindow(QMainWindow, WindowMixin):
                 'Ctrl+Q', 'quit', u'Quit application')
         open = action('&Open', self.openFile,
                 'Ctrl+O', 'open', u'Open image or label file')
+
+        openTrainingSetDir = action('&Open Training Set', self.openTrainingSetDir,
+                'Ctrl+b', 'open', u'Open Dir')
 
         opendir = action('&Open Dir', self.openDir,
                 'Ctrl+u', 'open', u'Open Dir')
@@ -249,7 +255,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
                 fitWindow=fitWindow, fitWidth=fitWidth,
                 zoomActions=zoomActions,
-                fileMenuActions=(open,opendir,save,saveAs,close,quit),
+                fileMenuActions=(open,openTrainingSetDir,opendir,save,saveAs,close,quit),
                 beginner=(), advanced=(),
                 editMenu=(edit, copy, delete, None, color1, color2),
                 beginnerContext=(create, edit, copy, delete),
@@ -267,7 +273,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 labelList=labelMenu)
 
         addActions(self.menus.file,
-                (open, opendir,changeSavedir, openAnnotation, self.menus.recentFiles, save, saveAs, close, None, quit))
+                (open, openTrainingSetDir, opendir,changeSavedir, openAnnotation, self.menus.recentFiles, save, saveAs, close, None, quit))
         addActions(self.menus.help, (help,))
         addActions(self.menus.view, (
             labels, advancedMode, None,
@@ -285,7 +291,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
-            open, opendir, openNextImg, openPrevImg, save, None, create, copy, delete, None,
+            open, openTrainingSetDir,opendir, openNextImg, openPrevImg, save, None, create, copy, delete, None,
             zoomIn, zoom, zoomOut, fitWindow, fitWidth)
 
         self.actions.advanced = (
@@ -566,6 +572,8 @@ class MainWindow(QMainWindow, WindowMixin):
                 print 'savePascalVocFormat save to:' + filename
                 lf.savePascalVocFormat(filename, shapes, unicode(self.filename), self.imageData,
                     self.lineColor.getRgb(), self.fillColor.getRgb())
+                # Add filename to Class Text files
+                self.saveFilenameToTextFiles(filename, shapes)
             else:
                 lf.save(filename, shapes, unicode(self.filename), self.imageData,
                     self.lineColor.getRgb(), self.fillColor.getRgb())
@@ -576,6 +584,14 @@ class MainWindow(QMainWindow, WindowMixin):
             self.errorMessage(u'Error saving label data',
                     u'<b>%s</b>' % e)
             return False
+
+    def saveFilenameToTextFiles(self, filename, shapes):
+        textFiles = TextFiles(self.classesTextFileDirectoryName)
+
+        textFiles.addFilenameToTextFiles(filename, shapes)
+
+        return
+
 
     def copySelectedShape(self):
         self.addLabel(self.canvas.copySelectedShape())
@@ -825,6 +841,42 @@ class MainWindow(QMainWindow, WindowMixin):
                 '%s - Choose a xml file' % __appname__, path, filters))
             self.loadPascalXMLByFilename(filename)
 
+    def openTrainingSetDir(self):
+        print "Open Training Set Directory"
+        path = os.path.dirname(unicode(self.filename))\
+                if self.filename else '.'
+
+        trainingSetDirectory = unicode(QFileDialog.getExistingDirectory(self,
+            '%s - Open Directory' % __appname__, path,  QFileDialog.ShowDirsOnly
+                                                | QFileDialog.DontResolveSymlinks))
+
+        # Top Level Folder containing MIRA2016 -> Annotations / ImageSets / JPEGImages
+        self.trainingSetDirectoryName = trainingSetDirectory
+
+        # Low level folder 'Miradevkit2016/MIRA2016'
+        if os.path.isdir(self.trainingSetDirectoryName):
+            MIRA2016DirectoryPath = os.path.join(self.trainingSetDirectoryName, "MIRA2016")
+        else:
+            print "Error finding MIRA2016 sub folder."
+
+        # Folder containing all the images 'Miradevkit2016/MIRA2016/JPEGImages'
+        if os.path.isdir(MIRA2016DirectoryPath):
+            self.dirname = os.path.join(MIRA2016DirectoryPath, "JPEGImages")
+
+        if os.path.isdir(self.dirname):
+            self.mImgList = self.scanAllImages(self.dirname)
+            self.openNextImg()
+
+        if self.dirname is not None and len(self.dirname) > 1:
+            self.lastOpenDir = self.dirname
+
+        # Folder containing text files detail image names to be used for training
+        if os.path.isdir(MIRA2016DirectoryPath):
+            self.classesTextFileDirectoryName = os.path.join(MIRA2016DirectoryPath, "ImageSets/Main")
+
+
+        return
+
     def openDir(self, _value=False):
         if not self.mayContinue():
             return
@@ -847,6 +899,12 @@ class MainWindow(QMainWindow, WindowMixin):
         self.openNextImg()
 
     def openPrevImg(self, _value=False):
+        # Proceding next image without dialog if having any label
+        if self.autoSaving is True and self.defaultSaveDir is not None:
+            #if self.dirty is True and self.hasLabels():
+            if self.hasLabels():
+                self.saveFile()
+
         if not self.mayContinue():
             return
 
@@ -865,7 +923,8 @@ class MainWindow(QMainWindow, WindowMixin):
     def openNextImg(self, _value=False):
         # Proceding next image without dialog if having any label
         if self.autoSaving is True and self.defaultSaveDir is not None:
-            if self.dirty is True and self.hasLabels():
+            #if self.dirty is True and self.hasLabels():
+            if self.hasLabels():
                 self.saveFile()
 
         if not self.mayContinue():
@@ -874,6 +933,7 @@ class MainWindow(QMainWindow, WindowMixin):
         if len(self.mImgList) <= 0:
             return
 
+        filename = ""
         if self.filename is None:
             filename = self.mImgList[0]
         else:
