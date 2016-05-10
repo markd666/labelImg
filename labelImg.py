@@ -22,6 +22,8 @@ from labelDialog import LabelDialog
 from colorDialog import ColorDialog
 from labelFile import LabelFile, LabelFileError
 from textFiles import TextFiles
+from check_files import CheckFiles
+from generateTestFiles import GenerateTestFiles
 from toolBar import ToolBar
 from pascal_voc_io import PascalVocReader
 
@@ -155,8 +157,12 @@ class MainWindow(QMainWindow, WindowMixin):
         openPrevImg = action('&Prev Image', self.openPrevImg,
                 'p', 'prev', u'Open Prev')
 
+        generateTestFiles = action('&Generate Test Files', self.generateTestFiles,
+                                    'Ctrl+x', 'test files', u'Generate Test Files')
+
         save = action('&Save', self.saveFile,
                 'Ctrl+S', 'save', u'Save labels to file', enabled=False)
+
         saveAs = action('&Save As', self.saveFileAs,
                 'Ctrl+Shift+S', 'save-as', u'Save labels to a different file',
                 enabled=False)
@@ -166,6 +172,9 @@ class MainWindow(QMainWindow, WindowMixin):
                 'Ctrl+L', 'color_line', u'Choose Box line color')
         color2 = action('Box &Fill Color', self.chooseColor2,
                 'Ctrl+Shift+L', 'color', u'Choose Box fill color')
+
+        checkFiles  = action('Check Files', self.checkFiles,
+                'F10', 'check files', u'Check Files')
 
         createMode = action('Create\nRectBox', self.setCreateMode,
                 'F1', 'new', u'Start drawing Boxs', enabled=False)
@@ -247,8 +256,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.labelList.customContextMenuRequested.connect(self.popLabelListMenu)
 
         # Store actions for further handling.
-        self.actions = struct(save=save, saveAs=saveAs, open=open, close=close,
-                lineColor=color1, fillColor=color2,
+        self.actions = struct(save=save, generateTestFiles=generateTestFiles ,saveAs=saveAs, open=open, close=close,
+                lineColor=color1, fillColor=color2, checkFiles=checkFiles,
                 create=create, delete=delete, edit=edit, copy=copy,
                 createMode=createMode, editMode=editMode, advancedMode=advancedMode,
                 shapeLineColor=shapeLineColor, shapeFillColor=shapeFillColor,
@@ -257,7 +266,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 zoomActions=zoomActions,
                 fileMenuActions=(open,openTrainingSetDir,opendir,save,saveAs,close,quit),
                 beginner=(), advanced=(),
-                editMenu=(edit, copy, delete, None, color1, color2),
+                editMenu=(edit, copy, delete, None, color1, color2, checkFiles),
                 beginnerContext=(create, edit, copy, delete),
                 advancedContext=(createMode, editMode, edit, copy,
                     delete, shapeLineColor, shapeFillColor),
@@ -292,7 +301,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
             open, openTrainingSetDir,opendir, openNextImg, openPrevImg, save, None, create, copy, delete, None,
-            zoomIn, zoom, zoomOut, fitWindow, fitWidth)
+            generateTestFiles, zoomIn, zoom, zoomOut, fitWindow, fitWidth)
 
         self.actions.advanced = (
             open, save, None,
@@ -585,10 +594,10 @@ class MainWindow(QMainWindow, WindowMixin):
                     u'<b>%s</b>' % e)
             return False
 
-    def saveFilenameToTextFiles(self, filename, shapes):
+    def saveFilenameToTextFiles(self, filename, itemsFoundInImage):
         textFiles = TextFiles(self.classesTextFileDirectoryName)
 
-        textFiles.addFilenameToTextFiles(filename, shapes)
+        textFiles.addFilenameToTextFiles(filename, itemsFoundInImage, self.labelHist)
 
         return
 
@@ -863,6 +872,8 @@ class MainWindow(QMainWindow, WindowMixin):
         if os.path.isdir(MIRA2016DirectoryPath):
             self.dirname = os.path.join(MIRA2016DirectoryPath, "JPEGImages")
 
+            self.defaultSaveDir = os.path.join(MIRA2016DirectoryPath, "Annotations")
+
         if os.path.isdir(self.dirname):
             self.mImgList = self.scanAllImages(self.dirname)
             self.openNextImg()
@@ -943,6 +954,14 @@ class MainWindow(QMainWindow, WindowMixin):
 
         if filename:
             self.loadFile(filename)
+
+    def generateTestFiles(self, _value=False):
+        yes, no = QMessageBox.Yes, QMessageBox.No
+        msg = u'You are about to alter training files and generate test files, proceed anyway?'
+        if yes == QMessageBox.warning(self, u'Attention', msg, yes|no):
+            testFiles = GenerateTestFiles(self.classesTextFileDirectoryName)
+            testFiles.createNewTestFiles()
+            return
 
     def openFile(self, _value=False):
         if not self.mayContinue():
@@ -1048,6 +1067,29 @@ class MainWindow(QMainWindow, WindowMixin):
             Shape.fill_color = self.fillColor
             self.canvas.update()
             self.setDirty()
+
+    def checkFiles(self):
+        check = CheckFiles(self.defaultSaveDir, self.dirname)
+        erroneousAnnotationFiles = check.checkAnnotationFilesForJpeg()
+        erroneousJpegFiles = check.checkJpegFilesForAnnotation()
+
+        outputInfo = "No erroneous files found!"
+        if erroneousAnnotationFiles:
+            outputInfo = str(len(erroneousAnnotationFiles)) + " erroneous annotation files: "
+            for filename in erroneousAnnotationFiles:
+                outputInfo += str(filename) + ".xml, "
+            outputInfo += "\n"
+        elif erroneousJpegFiles:
+            outputInfo = str(len(erroneousJpegFiles)) + " JPEG files without annotation files: "
+            for filename in erroneousJpegFiles:
+                outputInfo += str(filename) + ".jpg, "
+
+
+        QMessageBox.information(self, u'Files Checked', outputInfo)
+
+
+
+        return
 
     def deleteSelectedShape(self):
         yes, no = QMessageBox.Yes, QMessageBox.No
