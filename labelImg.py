@@ -24,6 +24,7 @@ from labelFile import LabelFile, LabelFileError
 from textFiles import TextFiles
 from check_files import CheckFiles
 from generateTestFiles import GenerateTestFiles
+from generatePrototxtFiles import GeneratePrototxtFiles
 from toolBar import ToolBar
 from pascal_voc_io import PascalVocReader
 
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.dirname = None
         self.trainingSetDirectoryName = None
         self.classesTextFileDirectoryName = None
+        self.modelPrototxtDirectoryName = None
         self.labelHist = []
         self.lastOpenDir = None
 
@@ -157,8 +159,11 @@ class MainWindow(QMainWindow, WindowMixin):
         openPrevImg = action('&Prev Image', self.openPrevImg,
                 'p', 'prev', u'Open Prev')
 
-        generateTestFiles = action('&Generate Test Files', self.generateTestFiles,
+        generateTestFiles = action('Generate &Test Files', self.generateTestFiles,
                                     'Ctrl+x', 'test files', u'Generate Test Files')
+
+        generatePrototxtFiles = action('Generate &prototxt Files', self.generatePrototxtFiles,
+                                    'F11', 'prototxt files', u'Generate Prototxt Files')
 
         save = action('&Save', self.saveFile,
                 'Ctrl+S', 'save', u'Save labels to file', enabled=False)
@@ -266,7 +271,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 zoomActions=zoomActions,
                 fileMenuActions=(open,openTrainingSetDir,opendir,save,saveAs,close,quit),
                 beginner=(), advanced=(),
-                editMenu=(edit, copy, delete, None, color1, color2, checkFiles),
+                editMenu=(edit, copy, delete, None, color1, color2),
                 beginnerContext=(create, edit, copy, delete),
                 advancedContext=(createMode, editMode, edit, copy,
                     delete, shapeLineColor, shapeFillColor),
@@ -277,6 +282,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 file=self.menu('&File'),
                 edit=self.menu('&Edit'),
                 view=self.menu('&View'),
+                tools=self.menu('&Tools'),
                 help=self.menu('&Help'),
                 recentFiles=QMenu('Open &Recent'),
                 labelList=labelMenu)
@@ -284,6 +290,7 @@ class MainWindow(QMainWindow, WindowMixin):
         addActions(self.menus.file,
                 (open, openTrainingSetDir, opendir,changeSavedir, openAnnotation, self.menus.recentFiles, save, saveAs, close, None, quit))
         addActions(self.menus.help, (help,))
+        addActions(self.menus.tools, (checkFiles, generateTestFiles, generatePrototxtFiles))
         addActions(self.menus.view, (
             labels, advancedMode, None,
             hideAll, showAll, None,
@@ -300,8 +307,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
-            open, openTrainingSetDir,opendir, openNextImg, openPrevImg, save, None, create, copy, delete, None,
-            generateTestFiles, zoomIn, zoom, zoomOut, fitWindow, fitWidth)
+            openNextImg, openPrevImg, None, create, copy, delete, None,
+            zoomIn, zoom, zoomOut, fitWindow)
 
         self.actions.advanced = (
             open, save, None,
@@ -871,8 +878,9 @@ class MainWindow(QMainWindow, WindowMixin):
         # Folder containing all the images 'Miradevkit2016/MIRA2016/JPEGImages'
         if os.path.isdir(MIRA2016DirectoryPath):
             self.dirname = os.path.join(MIRA2016DirectoryPath, "JPEGImages")
-
             self.defaultSaveDir = os.path.join(MIRA2016DirectoryPath, "Annotations")
+            self.classesTextFileDirectoryName = os.path.join(MIRA2016DirectoryPath, "ImageSets/Main")
+            self.modelPrototxtDirectoryName = os.path.join(MIRA2016DirectoryPath, "Models")
 
         if os.path.isdir(self.dirname):
             self.mImgList = self.scanAllImages(self.dirname)
@@ -881,9 +889,8 @@ class MainWindow(QMainWindow, WindowMixin):
         if self.dirname is not None and len(self.dirname) > 1:
             self.lastOpenDir = self.dirname
 
-        # Folder containing text files detail image names to be used for training
-        if os.path.isdir(MIRA2016DirectoryPath):
-            self.classesTextFileDirectoryName = os.path.join(MIRA2016DirectoryPath, "ImageSets/Main")
+        if not os.path.isdir(self.modelPrototxtDirectoryName):
+            os.mkdir(self.modelPrototxtDirectoryName)
 
 
         return
@@ -962,6 +969,11 @@ class MainWindow(QMainWindow, WindowMixin):
             testFiles = GenerateTestFiles(self.classesTextFileDirectoryName)
             testFiles.createNewTestFiles()
             return
+
+    def generatePrototxtFiles(self, _value=False):
+        prototxtFiles = GeneratePrototxtFiles(self.modelPrototxtDirectoryName)
+        prototxtFiles.createPrototxtFiles(len(self.labelHist))
+        return
 
     def openFile(self, _value=False):
         if not self.mayContinue():
