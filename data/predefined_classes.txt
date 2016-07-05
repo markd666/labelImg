@@ -1,3 +1,5 @@
 tree
 building
 track_edge
+armco
+road_edge
